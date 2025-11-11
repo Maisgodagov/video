@@ -1,0 +1,177 @@
+const fs = require('fs').promises;
+const path = require('path');
+const config = require('../config/config');
+const { extractAudio } = require('./audio/extractor');
+const { transcribeAudio } = require('./transcription/whisper');
+const { analyzeText } = require('./analysis/textAnalyzer');
+const { generateExercises } = require('./exercises/generator');
+const { runMigrations, saveVideoData, closeConnection } = require('./database/db');
+const { uploadVideo } = require('./storage/uploader');
+const { translateTranscription } = require('./translation/translator');
+
+/**
+ * Process a single video file
+ */
+async function processVideo(videoPath) {
+  const videoName = path.basename(videoPath);
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`Processing video: ${videoName}`);
+  console.log('='.repeat(60));
+
+  try {
+    // Step 1: Extract audio and read metadata
+    console.log('\n[Step 1/7] Extracting audio and metadata...');
+    const { audioPath, durationSeconds } = await extractAudio(videoPath, config.tempDir);
+
+    // Step 2: Transcribe with Whisper
+    console.log('\n[Step 2/7] Transcribing with Whisper...');
+    const transcription = await transcribeAudio(audioPath);
+
+    // Step 3: Translate transcript to Russian
+    console.log('\n[Step 3/7] Translating transcript to Russian...');
+    const translation = await translateTranscription(transcription);
+
+    // Step 4: Analyze text with Ollama
+    console.log('\n[Step 4/7] Analyzing text with Ollama...');
+    const analysis = await analyzeText(transcription.fullText);
+
+    // Step 5: Generate exercises
+    console.log('\n[Step 5/7] Generating exercises...');
+    const exercises = await generateExercises(transcription.fullText, analysis);
+
+    // Step 6: Upload video to storage
+    console.log('\n[Step 6/7] Uploading original video to storage...');
+    const videoUrl = await uploadVideo(videoPath);
+
+    // Step 7: Save to database
+    console.log('\n[Step 7/7] Saving to database...');
+    const videoData = {
+      videoName,
+      transcription,
+      translation,
+      analysis,
+      exercises,
+      durationSeconds,
+      videoUrl
+    };
+
+    const videoId = await saveVideoData(videoData);
+
+    // Save complete result to JSON file
+    const outputPath = path.join(
+      config.outputDir,
+      `${path.basename(videoPath, path.extname(videoPath))}.json`
+    );
+    await fs.writeFile(outputPath, JSON.stringify(videoData, null, 2));
+
+    console.log(`\n? Video processed successfully!`);
+    console.log(`  - Database ID: ${videoId}`);
+    console.log(`  - Output JSON: ${outputPath}`);
+    console.log(`  - CEFR Level: ${analysis.cefrLevel}`);
+    console.log(`  - Topics: ${analysis.topics.join(', ')}`);
+    console.log(`  - Exercises: ${exercises.length}`);
+    if (typeof durationSeconds === 'number') {
+      console.log(`  - Duration (s): ${durationSeconds}`);
+    }
+    console.log(`  - Video CDN URL: ${videoUrl}`);
+
+    // Clean up temp audio file
+    await fs.unlink(audioPath).catch(() => {});
+
+    return videoData;
+
+  } catch (error) {
+    console.error(`\n? Error processing ${videoName}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Main pipeline function
+ */
+async function runPipeline() {
+  console.log('\n' + '='.repeat(60));
+  console.log('VIDEO PROCESSING PIPELINE');
+  console.log('='.repeat(60));
+
+  try {
+    // Ensure directories exist
+    await fs.mkdir(config.inputDir, { recursive: true });
+    await fs.mkdir(config.outputDir, { recursive: true });
+    await fs.mkdir(config.tempDir, { recursive: true });
+
+    // Run database migrations
+    console.log('\nRunning database migrations...');
+    await runMigrations();
+
+    // Get all video files from input directory
+    const files = await fs.readdir(config.inputDir);
+    const videoFiles = files.filter(file =>
+      /\.(mp4|mov|avi|mkv|webm)$/i.test(file)
+    );
+
+    if (videoFiles.length === 0) {
+      console.log('\n? No video files found in input directory:');
+      console.log(`  ${config.inputDir}`);
+      console.log('\nPlease add video files to the input directory and run again.');
+      return;
+    }
+
+    console.log(`\nFound ${videoFiles.length} video(s) to process:`);
+    videoFiles.forEach((file, i) => {
+      console.log(`  ${i + 1}. ${file}`);
+    });
+
+    // Process each video
+    const results = [];
+    for (let i = 0; i < videoFiles.length; i++) {
+      const videoPath = path.join(config.inputDir, videoFiles[i]);
+      console.log(`\n\nProcessing ${i + 1}/${videoFiles.length}...`);
+
+      try {
+        const result = await processVideo(videoPath);
+        results.push({ file: videoFiles[i], status: 'success', result });
+      } catch (error) {
+        results.push({ file: videoFiles[i], status: 'failed', error: error.message });
+      }
+    }
+
+    // Print summary
+    console.log('\n\n' + '='.repeat(60));
+    console.log('PROCESSING SUMMARY');
+    console.log('='.repeat(60));
+    const successful = results.filter(r => r.status === 'success').length;
+    const failed = results.filter(r => r.status === 'failed').length;
+    console.log(`\nTotal videos: ${results.length}`);
+    console.log(`? Successful: ${successful}`);
+    console.log(`? Failed: ${failed}`);
+
+    if (failed > 0) {
+      console.log('\nFailed videos:');
+      results.filter(r => r.status === 'failed').forEach(r => {
+        console.log(`  - ${r.file}: ${r.error}`);
+      });
+    }
+
+  } catch (error) {
+    console.error('\n? Pipeline error:', error);
+    throw error;
+  } finally {
+    await closeConnection();
+  }
+}
+
+// Run the pipeline
+if (require.main === module) {
+  runPipeline()
+    .then(() => {
+      console.log('\n? Pipeline completed!');
+      process.exit(0);
+    })
+    .catch(error => {
+      console.error('\n? Pipeline failed:', error);
+      process.exit(1);
+    });
+}
+
+module.exports = { processVideo, runPipeline };

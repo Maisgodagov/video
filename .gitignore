@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment
+.env
+
+# Video files (input/output)
+video-pipeline/input/*.mp4
+video-pipeline/input/*.mov
+video-pipeline/input/*.avi
+video-pipeline/input/*.mkv
+video-pipeline/input/*.webm
+
+# Temporary files
+video-pipeline/temp/*
+!video-pipeline/temp/.gitkeep
+
+# Output files (JSON results)
+video-pipeline/output/*.json
+
+# Whisper models cache
+.cache/
+models/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
