@@ -16,7 +16,7 @@ module.exports = {
     database: "mgodag3j_english",
   },
 
-  // S3 storage settings
+  // S3 storage settings (for output - processed videos)
   storage: {
     endpoint: "https://s3.ru1.storage.beget.cloud",
     region: "ru-1",
@@ -24,6 +24,25 @@ module.exports = {
     accessKeyId: "3GMH0JAWVGIFOYW9ONVA",
     secretAccessKey: "h5DDOB7oR7TIIRbT9SDyfywEGOIDinAjbzwyaOt7",
     cdnDomain: "gagehegororik.begetcdn.cloud",
+  },
+
+  // S3 input settings (for source videos)
+  // Set USE_S3_INPUT=true in .env to enable S3 input
+  s3Input: {
+    enabled: process.env.USE_S3_INPUT === "true",
+    endpoint: process.env.S3_INPUT_ENDPOINT || "https://s3.ru1.storage.beget.cloud",
+    region: process.env.S3_INPUT_REGION || "ru-1",
+    bucket: process.env.S3_INPUT_BUCKET || "video-pipeline-input",
+    accessKeyId: process.env.S3_INPUT_ACCESS_KEY_ID || process.env.S3_ACCESS_KEY_ID || "3GMH0JAWVGIFOYW9ONVA",
+    secretAccessKey: process.env.S3_INPUT_SECRET_ACCESS_KEY || process.env.S3_SECRET_ACCESS_KEY || "h5DDOB7oR7TIIRbT9SDyfywEGOIDinAjbzwyaOt7",
+    // Folder structure in bucket
+    pendingPrefix: process.env.S3_INPUT_PENDING_PREFIX || "pending/",
+    processingPrefix: process.env.S3_INPUT_PROCESSING_PREFIX || "processing/",
+    completedPrefix: process.env.S3_INPUT_COMPLETED_PREFIX || "completed/",
+    failedPrefix: process.env.S3_INPUT_FAILED_PREFIX || "failed/",
+    // Polling settings for continuous monitoring
+    enablePolling: process.env.S3_INPUT_ENABLE_POLLING === "true",
+    pollingIntervalSeconds: Number.parseInt(process.env.S3_INPUT_POLLING_INTERVAL || "60", 10),
   },
 
   // Google APIs

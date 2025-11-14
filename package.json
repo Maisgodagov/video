@@ -9,7 +9,10 @@
     "core": "node video-pipeline/src/index.js --mode=no-exercises",
     "transcription": "node video-pipeline/src/index.js --mode=transcription-only",
     "check": "node video-pipeline/src/check-setup.js",
-    "test": "node video-pipeline/src/test-modules.js"
+    "test": "node video-pipeline/src/test-modules.js",
+    "s3": "node video-pipeline/src/index-s3.js",
+    "s3:watch": "node video-pipeline/src/index-s3.js --watch",
+    "local": "USE_S3_INPUT=false node video-pipeline/src/index.js"
   },
   "keywords": [
     "video",

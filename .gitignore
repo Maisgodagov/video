@@ -36,3 +36,19 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Google Cloud / GCP
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+video-pipeline-key.json
+service-account-key.json
+
+# Deployment
+*.tar.gz
+*.zip
+
+# Backup files
+*.bak
+*.backup
